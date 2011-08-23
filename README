@@ -1,0 +1,4 @@
+tnetstring package for Go.
+
+Almost a direct translation of the reference implementation given at http://tnetstrings.org/
+

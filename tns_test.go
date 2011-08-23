@@ -23,8 +23,8 @@ var FORMAT_EXAMPLES = map[string]interface{}{
 	"4:test,":                                      "test",
 	"3:123#":                                       int64(123),
 	"16:5:hello,5:12345#}":                         map[string]interface{}{"hello": int64(12345)},
-	"32:5:hello,5:12345#5:hello,5:56789#]": []interface{}{"hello", int64(12345), "hello", int64(56789)},
-	"9:3.1415926^": float64(3.1415926),
+	"32:5:hello,5:12345#5:hello,5:56789#]":         []interface{}{"hello", int64(12345), "hello", int64(56789)},
+	"9:3.1415926^":                                 float64(3.1415926),
 }
 
 func TestParse(t *testing.T) {
@@ -48,6 +48,39 @@ func TestParse(t *testing.T) {
 			fmt.Println(a)
 			fmt.Println(s)
 			t.Fail()
+		}
+	}
+}
+
+func TestUnmarhsal(t *testing.T) {
+	defer func() {
+		a := recover()
+		if a != nil {
+			fmt.Println(a)
+			t.Fail()
+		}
+	}()
+	var v interface{}
+	for key, val := range FORMAT_EXAMPLES {
+
+		err := Unmarshal(key, &v)
+		if err != nil {
+			t.Fail()
+		}
+		bo := reflect.DeepEqual(v, val)
+		if !bo {
+			fmt.Println("for: " + key)
+			fmt.Println(val)
+			fmt.Println(v)
+			t.Fail()
+		}
+		
+		b,err := Marshal(v)
+		if err != nil {
+			t.Error(err)
+		}
+		if string(b) != key {
+			t.Error(string(b)+"!="+key)
 		}
 	}
 }
