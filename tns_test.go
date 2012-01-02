@@ -43,10 +43,10 @@ func TestParse(t *testing.T) {
 		}
 		bo := reflect.DeepEqual(a, val)
 		if !bo {
-			fmt.Println("for: " + key)
-			fmt.Println(val)
-			fmt.Println(a)
-			fmt.Println(s)
+			fmt.Println("for: ", key)
+			fmt.Printf("val: %#v\n", val)
+			fmt.Printf("a: %#v\n", a)
+			fmt.Printf("s: %#v\n", s)
 			t.Fail()
 		}
 	}
@@ -74,13 +74,14 @@ func TestUnmarhsal(t *testing.T) {
 			fmt.Println(v)
 			t.Fail()
 		}
-		
 		b,err := Marshal(v)
 		if err != nil {
 			t.Error(err)
+			t.Fail()
 		}
 		if string(b) != key {
-			t.Error(string(b)+"!="+key)
+			fmt.Println(reflect.ValueOf(v).Kind().String())
+			t.Error("\""+string(b)+"\" != \""+key+"\"")
 		}
 	}
 }

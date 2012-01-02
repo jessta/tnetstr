@@ -1,27 +1,28 @@
 package tnetstr
 
 import (
+	"bytes"
+	"encoding/base64"
+
+	"errors"
+	"reflect"
+	"runtime"
+	"sort"
 	"strconv"
 	"strings"
-	"os"
-	"bytes"
-	"runtime"
-	"reflect"
-	"sort"
-	"encoding/base64"
 )
 
-func Marshal(v interface{}) ([]byte, os.Error) {
+func Marshal(v interface{}) ([]byte, error) {
 	e := new(encodeState)
-	s,err := e.marshal(v)
+	s, err := e.marshal(v)
 	if err != nil {
-		return nil,err
+		return nil, err
 	}
 
 	return []byte(s), nil
 }
 
-func Unmarshal(data string, v interface{}) os.Error {
+func Unmarshal(data string, v interface{}) error {
 	val, _, err := parse(data)
 	if err != nil {
 		return err
@@ -33,12 +34,12 @@ func Unmarshal(data string, v interface{}) os.Error {
 	}
 	return nil
 }
-func parse(data string) (interface{}, string, os.Error) {
+func parse(data string) (interface{}, string, error) {
 	payload, payloadType, remain := parsePayload(data)
 
 	switch payloadType {
 	case '#':
-		value, err := strconv.Atoi64(payload)
+		value, err := strconv.ParseInt(payload, 10, 64)
 		return value, remain, err
 	case '}':
 		value, err := parseDict(payload)
@@ -50,13 +51,13 @@ func parse(data string) (interface{}, string, os.Error) {
 		value := (payload == "true")
 		return value, remain, nil
 	case '^':
-		value, err := strconv.Atof64(payload)
+		value, err := strconv.ParseFloat(payload, 64)
 		return value, remain, err
 
 	case '~':
-		var err os.Error = nil
+		var err error = nil
 		if len(payload) != 0 {
-			err = os.NewError("Payload must be 0 length for null.")
+			err = errors.New("Payload must be 0 length for null.")
 		}
 		return interface{}(nil), remain, err
 	case ',':
@@ -69,9 +70,9 @@ func parsePayload(data string) (string, byte, string) {
 	lenStr := strings.SplitN(data, ":", 2)
 	extra := data[len(lenStr[0])+1:]
 	//fmt.Println(extra)
-	length, err := strconv.Atoi64(lenStr[0])
+	length, err := strconv.ParseInt(lenStr[0], 10, 64)
 	if err != nil {
-		panic("length:" + err.String())
+		panic("length:" + err.Error())
 	}
 
 	payload, extra := extra[0:length], extra[length:]
@@ -80,7 +81,7 @@ func parsePayload(data string) (string, byte, string) {
 	return payload, payloadType, remain
 }
 
-func parseList(data string) ([]interface{}, os.Error) {
+func parseList(data string) ([]interface{}, error) {
 	if data == "" {
 		return []interface{}{}, nil
 	}
@@ -101,7 +102,7 @@ func parseList(data string) ([]interface{}, os.Error) {
 	return result, nil
 }
 
-func parsePair(data string) (interface{}, interface{}, string, os.Error) {
+func parsePair(data string) (interface{}, interface{}, string, error) {
 	key, extra, err := parse(data)
 	if err != nil {
 		return nil, nil, "", err
@@ -116,9 +117,9 @@ func parsePair(data string) (interface{}, interface{}, string, os.Error) {
 	return key, value, extra, nil
 }
 
-func parseDict(data string) (map[string]interface{}, os.Error) {
+func parseDict(data string) (map[string]interface{}, error) {
 	if data == "" {
-		return nil, nil
+		return map[string]interface{}{}, nil
 	}
 
 	key, value, extra, err := parsePair(data)
@@ -141,6 +142,7 @@ func parseDict(data string) (map[string]interface{}, os.Error) {
 	}
 	return result, nil
 }
+
 /*
 func dumpDict(data interface{}){
     result = []
@@ -160,7 +162,6 @@ func dumpList(data interface{}):
     payload = ''.join(result)
     return '%d:' % len(payload) + payload + ']'*/
 
-
 type encodeState struct {
 	bytes.Buffer // accumulated output
 }
@@ -169,29 +170,29 @@ type UnsupportedTypeError struct {
 	Type reflect.Type
 }
 
-func (e *UnsupportedTypeError) String() string {
+func (e *UnsupportedTypeError) Error() string {
 	return "tnetstr: unsupported type: " + e.Type.String()
 }
 
-func (e *encodeState) marshal(v interface{}) (s string, err os.Error) {
+func (e *encodeState) marshal(v interface{}) (s string, err error) {
 	defer func() {
 		if r := recover(); r != nil {
 			if _, ok := r.(runtime.Error); ok {
 				panic(r)
 			}
-			err = r.(os.Error)
+			err = r.(error)
 		}
 	}()
-	return e.reflectValue(reflect.ValueOf(v)),nil
+	return e.reflectValue(reflect.ValueOf(v)), nil
 }
 
-func (e *encodeState) error(err os.Error) {
+func (e *encodeState) error(err error) {
 	panic(err)
 }
 
 var byteSliceType = reflect.TypeOf([]byte(nil))
 
-func (e *encodeState) reflectValue(v reflect.Value) string{
+func (e *encodeState) reflectValue(v reflect.Value) string {
 	if !v.IsValid() {
 		return "0:~"
 	}
@@ -206,29 +207,29 @@ func (e *encodeState) reflectValue(v reflect.Value) string{
 		}
 
 	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
-		s := strconv.Itoa64(v.Int())
+		s := strconv.FormatInt(v.Int(), 10)
 		l := strconv.Itoa(len(s))
-		return l+":"+s+"#"
+		return l + ":" + s + "#"
 
 	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64, reflect.Uintptr:
-		s := strconv.Uitoa64(v.Uint())
+		s := strconv.FormatUint(v.Uint(), 10)
 		l := strconv.Itoa(len(s))
-		return l+":"+s+"#"
+		return l + ":" + s + "#"
 
 	case reflect.Float32, reflect.Float64:
-		s := strconv.FtoaN(v.Float(), 'g', -1, v.Type().Bits())
-		l := strconv.Itoa(len(s))		
-		return l+":"+s+"^"
+		s := strconv.FormatFloat(v.Float(), 'g', -1, v.Type().Bits())
+		l := strconv.Itoa(len(s))
+		return l + ":" + s + "^"
 
 	case reflect.String:
 		l := strconv.Itoa(len(v.String()))
-		return l+":"+v.String()+","
+		return l + ":" + v.String() + ","
 
 	case reflect.Map:
 		if v.Type().Key().Kind() != reflect.String {
 			e.error(&UnsupportedTypeError{v.Type()})
 		}
-		if v.IsNil() {
+		if v.IsNil() || v.Len() == 0 {
 			return "0:}"
 		}
 
@@ -236,27 +237,27 @@ func (e *encodeState) reflectValue(v reflect.Value) string{
 		sort.Sort(sv)
 		for _, k := range sv {
 			l := strconv.Itoa(len(k.String()))
-			s:=l+":"+k.String()+","+e.reflectValue(v.MapIndex(k))
-			return strconv.Itoa(len(s))+":"+s+"}"
+			s := l + ":" + k.String() + "," + e.reflectValue(v.MapIndex(k))
+			return strconv.Itoa(len(s)) + ":" + s + "}"
 		}
 
 	case reflect.Array, reflect.Slice:
 		var des string
- 
+
 		if v.Type() == byteSliceType {
 			s := v.Interface().([]byte)
 			// for small buffers, using Encode directly is much faster.
 			dst := make([]byte, base64.StdEncoding.EncodedLen(len(s)))
 			base64.StdEncoding.Encode(dst, s)
-			des = des+string(dst)
+			des = des + string(dst)
 		}
 
 		n := v.Len()
 		for i := 0; i < n; i++ {
-			des = des+ e.reflectValue(v.Index(i))
+			des = des + e.reflectValue(v.Index(i))
 		}
 		l := strconv.Itoa(len(des))
-		return l+":"+des+"]"
+		return l + ":" + des + "]"
 
 	case reflect.Interface, reflect.Ptr:
 		if v.IsNil() {
@@ -270,21 +271,9 @@ func (e *encodeState) reflectValue(v reflect.Value) string{
 	return ""
 }
 
-
-
-
 type stringValues []reflect.Value
 
 func (sv stringValues) Len() int           { return len(sv) }
 func (sv stringValues) Swap(i, j int)      { sv[i], sv[j] = sv[j], sv[i] }
 func (sv stringValues) Less(i, j int) bool { return sv.get(i) < sv.get(j) }
 func (sv stringValues) get(i int) string   { return sv[i].String() }
-
-
-
-
-
-
-
-
-
